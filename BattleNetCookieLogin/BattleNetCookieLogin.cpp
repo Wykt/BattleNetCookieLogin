@@ -1,33 +1,69 @@
 #include <windows.h>
 #include <shlwapi.h>
+#include <sstream>
 #include <iostream>
 #include <cstdio>
+#include <iomanip>
 
 #pragma comment(lib,"Crypt32.lib")
 
 // got these bytes when I hooked CryptPprotectData from crypt32.dll
 BYTE entropyBytes[] = { 0xc8, 0x76, 0xf4, 0xae, 0x4c, 0x95, 0x2e, 0xfe, 0xf2, 0xfa, 0xf, 0x54, 0x19, 0xc0, 0x9c, 0x43 };
 
-char* GetExeFolderPath() {
-    char path[MAX_PATH];
-    GetModuleFileNameA(NULL, path, MAX_PATH);
-    PathRemoveFileSpecA(path);
-    return path;
+
+// thanks chatgpt
+int OverwriteValues(HKEY hKey, const char* subFolderPath, BYTE* bytes, int len)
+{
+    LONG result = RegOpenKeyEx(
+        hKey,  // handle to open key
+        subFolderPath,    // subkey to open
+        0,                  // reserved
+        KEY_ALL_ACCESS,     // desired security access
+        &hKey               // handle to open key
+    );
+
+    if (result != ERROR_SUCCESS) {
+        std::cerr << "Error opening registry key!" << std::endl;
+        return 0;
+    }
+
+    DWORD index = 0;
+    char name[4096];
+    DWORD nameSize = 4096;
+    DWORD valueType;
+    BYTE valueData[4096];
+    DWORD valueDataSize = 4096;
+
+    // Enumerate all the values in the key
+    while (RegEnumValue(hKey, index, name, &nameSize, NULL, &valueType, valueData, &valueDataSize) == ERROR_SUCCESS) {
+        std::cout << name << std::endl;
+        // Check if the value is of type REG_BINARY
+        if (valueType == REG_BINARY) {
+            // Overwrite the value with the new data
+            result = RegSetValueEx(
+                hKey,               // handle to key
+                name,               // value name
+                0,                  // reserved
+                valueType,          // type of value
+                bytes,              // value data
+                len                 // size of value data
+            );
+            if (result != ERROR_SUCCESS) {
+                std::cerr << "Error setting registry value!" << std::endl;
+            }
+        }
+
+        // Reset the name size and value data size for the next iteration
+        nameSize = 4096;
+        valueDataSize = 4096;
+        index++;
+    }
+
+    RegCloseKey(hKey);
+    return index;
 }
 
 int main() {
-    // Get Battle.net.config file path and write it to buff
-    char buff[100];
-    snprintf(buff, sizeof(buff), "c:/users/%s/appdata/roaming/battle.net/Battle.net.config", getenv("username"));
-
-    // Get our exe folder path and append it with /Battle.net.config
-    std::string exePath(GetExeFolderPath());
-    exePath += "\\Battle.net.config";
-
-    // Overwrite with our own config
-    remove(buff);
-    CopyFile(exePath.c_str(), buff, FALSE);
-
     // cookie input
     std::string cookie;
 
@@ -48,30 +84,17 @@ int main() {
     DATA_BLOB out;
 
     CryptProtectData(&in, NULL, &entropy, NULL, NULL, 1, &out);
-
-    HKEY hKey;
-    LPCTSTR lpSubKey = TEXT("SOFTWARE\\Blizzard Entertainment\\Battle.net\\UnifiedAuth");
-
-    // lpValueName depends on your Battle.net.config (emails, and probably clientId)
-    // I'm not 100% sure but I think it also depends on Battle.net installation folder
-    // That's why I overwrite Battle.net.config with my own config and hardcode this string (i'm too lazy to reverse)
-    LPCTSTR lpValueName = TEXT("9DB491B5");
-    LONG lResult;
-
-    lResult = RegOpenKeyEx(HKEY_CURRENT_USER, lpSubKey, 0, KEY_WRITE, &hKey);
-    if (lResult != ERROR_SUCCESS)
+    
+    if (OverwriteValues(HKEY_CURRENT_USER, "SOFTWARE\\Blizzard Entertainment\\Battle.net\\UnifiedAuth", out.pbData, out.cbData) > 0) 
     {
-        std::cerr << "Error opening key: " << lResult << std::endl;
-        return 1;
+        std::cout << "Success!" << std::endl;
+    }
+    else 
+    {
+        std::cout << "Couldn't find any reg values, are you sure that you are logged in with \"Keep logged in\" option?" << std::endl;
     }
 
-    lResult = RegSetValueEx(hKey, lpValueName, 0, REG_BINARY, out.pbData, out.cbData);
-    if (lResult != ERROR_SUCCESS)
-    {
-        std::cerr << "Error setting value: " << lResult << std::endl;
-        return 1;
-    }
-
-    RegCloseKey(hKey);
+    
+    Sleep(1000);
     return 0;
 }
