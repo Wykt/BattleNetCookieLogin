@@ -2,12 +2,10 @@
 Connect with a cookie on battle.net launcher
 
 # What it does
- + Overwrite your Battle.net.config with another one (the only user configuration in this file is language, which is replaced by en-US)
- + Ask for a cookie and encrypt it then save it in HKEY_CURRENT_USER/SOFTWARE/Blizzard Entertainment/Battle.net/UnifiedAuth/{value}
+ + Ask you for a cookie, encrypt it like battle.net does, then overwrite all values in "HKEY_CURRENT_USER\SOFTWARE\Blizzard Entertainment\Battle.net\UnifiedAuth" (these values are only useful for auto-login)
 
 # Any issues?
- + Make sure you have default battle.net installation path (C:/Program Files(x86)/Battle.net)
- + Make sure that you have already logged in to an account with auto login enabled on battle.net launcher (this is required so subfolders in regedit are created)
+ + Make sure that you are logged in with "Keep logged in" option on battle.net.launcher, otherwise the program won't be able to find the value to overwrite, since battle.net remove it when you are disconnected
  + If it still doesn't work, open an issue
  
 # Preview video
